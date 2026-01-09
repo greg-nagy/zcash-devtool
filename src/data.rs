@@ -8,7 +8,8 @@ use zcash_client_sqlite::{FsBlockDb, WalletDb};
 use tracing::error;
 
 use zcash_client_sqlite::chain::BlockMeta;
-use zcash_protocol::consensus::{self, Parameters};
+use zcash_protocol::consensus::{self, BlockHeight, Parameters};
+use zcash_protocol::local_consensus::LocalNetwork;
 
 use crate::error;
 
@@ -22,6 +23,7 @@ pub(crate) enum Network {
     #[default]
     Test,
     Main,
+    Regtest,
 }
 
 impl Network {
@@ -29,6 +31,7 @@ impl Network {
         match name {
             "main" => Ok(Network::Main),
             "test" => Ok(Network::Test),
+            "regtest" => Ok(Network::Regtest),
             other => Err(format!("Unsupported network: {other}")),
         }
     }
@@ -37,7 +40,32 @@ impl Network {
         match self {
             Network::Test => "test",
             Network::Main => "main",
+            Network::Regtest => "regtest",
         }
+    }
+
+    /// Returns true if this is Regtest network
+    pub(crate) fn is_regtest(&self) -> bool {
+        matches!(self, Network::Regtest)
+    }
+}
+
+/// Default Regtest network parameters matching Zebra's default configuration.
+/// All upgrades activate at height 1 (except Genesis at 0).
+pub(crate) fn regtest_network() -> LocalNetwork {
+    LocalNetwork {
+        overwinter: Some(BlockHeight::from_u32(1)),
+        sapling: Some(BlockHeight::from_u32(1)),
+        blossom: Some(BlockHeight::from_u32(1)),
+        heartwood: Some(BlockHeight::from_u32(1)),
+        canopy: Some(BlockHeight::from_u32(1)),
+        nu5: Some(BlockHeight::from_u32(1)),
+        nu6: Some(BlockHeight::from_u32(1)),
+        nu6_1: None, // Not activated by default
+        #[cfg(zcash_unstable = "nu7")]
+        nu7: None,
+        #[cfg(zcash_unstable = "zfuture")]
+        z_future: None,
     }
 }
 
@@ -46,6 +74,9 @@ impl From<Network> for consensus::Network {
         match value {
             Network::Test => consensus::Network::TestNetwork,
             Network::Main => consensus::Network::MainNetwork,
+            // Regtest should use LocalNetwork, not consensus::Network
+            // This conversion is kept for backwards compatibility but should not be used for Regtest
+            Network::Regtest => consensus::Network::TestNetwork,
         }
     }
 }

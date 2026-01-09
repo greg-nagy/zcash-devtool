@@ -72,7 +72,7 @@ impl Servers {
                         port_str
                             .parse()
                             .ok()
-                            .map(|port| Server::custom(host.into(), port))
+                            .map(|port| Server::custom_with_parts(host.into(), port))
                     })
                 })
                 .collect::<Option<_>>()
@@ -114,8 +114,22 @@ impl Server<'static> {
     }
 }
 
+impl Server<'static> {
+    /// Create a custom server from a "host:port" string
+    pub(crate) fn custom(addr: &str) -> Self {
+        let (host, port) = addr
+            .rsplit_once(':')
+            .and_then(|(h, p)| p.parse().ok().map(|port| (h, port)))
+            .unwrap_or((addr, 8137)); // Default to 8137 (Zaino default port)
+        Self {
+            host: Cow::Owned(host.to_string()),
+            port,
+        }
+    }
+}
+
 impl Server<'_> {
-    fn custom(host: String, port: u16) -> Self {
+    fn custom_with_parts(host: String, port: u16) -> Self {
         Self {
             host: Cow::Owned(host),
             port,

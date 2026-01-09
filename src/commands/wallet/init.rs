@@ -13,9 +13,9 @@ use zcash_protocol::consensus::{self, BlockHeight, Parameters};
 
 use crate::{
     config::WalletConfig,
-    data::{init_dbs, Network},
+    data::{init_dbs, regtest_network, Network},
     error,
-    remote::{tor_client, Servers},
+    remote::{tor_client, Server, Servers},
 };
 
 // Options accepted for the `init` command
@@ -33,15 +33,16 @@ pub(crate) struct Command {
     #[arg(long)]
     birthday: Option<u32>,
 
-    /// The network the wallet will be used with: \"test\" or \"main\" (default is \"test\")
+    /// The network the wallet will be used with: "test", "main", or "regtest"
     #[arg(short, long)]
     #[arg(value_parser = Network::parse)]
     network: Network,
 
-    /// The server to initialize with (default is \"ecc\")
+    /// The server to initialize with (default is "ecc" for mainnet/testnet).
+    /// For regtest, specify the server address directly (e.g., "localhost:8137")
     #[arg(short, long)]
-    #[arg(default_value = "ecc", value_parser = Servers::parse)]
-    server: Servers,
+    #[arg(default_value = "ecc")]
+    server: String,
 
     /// Disable connections via TOR
     #[arg(long)]
@@ -51,13 +52,22 @@ pub(crate) struct Command {
 impl Command {
     pub(crate) async fn run(self, wallet_dir: Option<String>) -> Result<(), anyhow::Error> {
         let opts = self;
-        let params = consensus::Network::from(opts.network);
 
-        let server = opts.server.pick(params)?;
-        let mut client = if opts.disable_tor {
+        // Connect to server based on network type
+        let mut client = if opts.network.is_regtest() {
+            // For regtest, connect directly to the specified server
+            let server = Server::custom(&opts.server);
             server.connect_direct().await?
         } else {
-            server.connect(|| tor_client(wallet_dir.as_ref())).await?
+            // For mainnet/testnet, use the server selection logic
+            let params = consensus::Network::from(opts.network);
+            let servers = Servers::parse(&opts.server)?;
+            let server = servers.pick(params)?;
+            if opts.disable_tor {
+                server.connect_direct().await?
+            } else {
+                server.connect(|| tor_client(wallet_dir.as_ref())).await?
+            }
         };
 
         // Get the current chain height (for the wallet's birthday and/or recover-until height).
@@ -133,14 +143,26 @@ impl Command {
             SecretVec::new(secret)
         };
 
-        Self::init_dbs(
-            params,
-            wallet_dir.as_ref(),
-            &opts.name,
-            &seed,
-            birthday,
-            None,
-        )
+        // Initialize DBs with appropriate network params
+        if opts.network.is_regtest() {
+            Self::init_dbs(
+                regtest_network(),
+                wallet_dir.as_ref(),
+                &opts.name,
+                &seed,
+                birthday,
+                None,
+            )
+        } else {
+            Self::init_dbs(
+                consensus::Network::from(opts.network),
+                wallet_dir.as_ref(),
+                &opts.name,
+                &seed,
+                birthday,
+                None,
+            )
+        }
     }
 
     pub(crate) async fn get_wallet_birthday(
