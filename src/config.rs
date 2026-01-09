@@ -7,17 +7,17 @@ use std::path::Path;
 use secrecy::{ExposeSecret, SecretVec, Zeroize};
 use serde::{Deserialize, Serialize};
 
-use zcash_protocol::consensus::{self, BlockHeight, Parameters};
+use zcash_protocol::consensus::{BlockHeight, Parameters};
 
 use crate::{
-    data::{Network, DEFAULT_WALLET_DIR},
+    data::{Network, NetworkParams, DEFAULT_WALLET_DIR},
     error,
 };
 
 const KEYS_FILE: &str = "keys.toml";
 
 pub(crate) struct WalletConfig {
-    network: consensus::Network,
+    params: NetworkParams,
     seed_ciphertext: Option<String>,
     birthday: BlockHeight,
 }
@@ -28,7 +28,7 @@ impl WalletConfig {
         recipients: impl Iterator<Item = &'a dyn age::Recipient>,
         mnemonic: &Mnemonic,
         birthday: BlockHeight,
-        network: consensus::Network,
+        network: Network,
     ) -> Result<(), anyhow::Error> {
         init_wallet_config(
             wallet_dir,
@@ -41,7 +41,7 @@ impl WalletConfig {
     pub(crate) fn init_without_mnemonic<P: AsRef<Path>>(
         wallet_dir: Option<P>,
         birthday: BlockHeight,
-        network: consensus::Network,
+        network: Network,
     ) -> Result<(), anyhow::Error> {
         init_wallet_config(wallet_dir, None, birthday, network)
     }
@@ -66,8 +66,9 @@ impl WalletConfig {
             .transpose()
     }
 
-    pub(crate) fn network(&self) -> consensus::Network {
-        self.network
+    /// Returns the network parameters (works for mainnet, testnet, and regtest)
+    pub(crate) fn network(&self) -> NetworkParams {
+        self.params.clone()
     }
 
     pub(crate) fn birthday(&self) -> BlockHeight {
@@ -79,7 +80,7 @@ fn init_wallet_config<P: AsRef<Path>>(
     wallet_dir: Option<P>,
     mnemonic: Option<String>,
     birthday: BlockHeight,
-    network: consensus::Network,
+    network: Network,
 ) -> Result<(), anyhow::Error> {
     // Create the wallet directory.
     let wallet_dir = wallet_dir
@@ -97,7 +98,7 @@ fn init_wallet_config<P: AsRef<Path>>(
 
     let config = ConfigEncoding {
         mnemonic,
-        network: Some(Network::from(network).name().to_string()),
+        network: Some(network.name().to_string()),
         birthday: Some(u32::from(birthday)),
     };
 
@@ -126,22 +127,23 @@ impl WalletConfig {
         let config: ConfigEncoding = toml::from_str(&conf_str)?;
 
         let network = config.network.map_or_else(
-            || Ok(consensus::Network::TestNetwork),
+            || Ok(Network::Test),
             |network_name| {
                 Network::parse(network_name.trim())
-                    .map(consensus::Network::from)
                     .map_err(|_| error::Error::InvalidKeysFile)
             },
         )?;
 
+        let params = NetworkParams::from(network);
+
         let birthday = config.birthday.map(BlockHeight::from).unwrap_or(
-            network
-                .activation_height(consensus::NetworkUpgrade::Sapling)
+            params
+                .activation_height(zcash_protocol::consensus::NetworkUpgrade::Sapling)
                 .expect("Sapling activation height is known."),
         );
 
         Ok(Self {
-            network,
+            params,
             seed_ciphertext: config.mnemonic,
             birthday,
         })
@@ -203,8 +205,8 @@ fn decrypt_seed<'a>(
 
 pub(crate) fn get_wallet_network<P: AsRef<Path>>(
     wallet_dir: Option<P>,
-) -> Result<consensus::Network, anyhow::Error> {
-    Ok(WalletConfig::read(wallet_dir)?.network)
+) -> Result<NetworkParams, anyhow::Error> {
+    Ok(WalletConfig::read(wallet_dir)?.network())
 }
 
 pub(crate) fn get_wallet_seed<'a, P: AsRef<Path>>(

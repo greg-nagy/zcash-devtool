@@ -13,7 +13,7 @@ use zcash_protocol::consensus::{self, BlockHeight, Parameters};
 
 use crate::{
     config::WalletConfig,
-    data::{init_dbs, regtest_network, Network},
+    data::{init_dbs, Network, NetworkParams},
     error,
     remote::{tor_client, Server, Servers},
 };
@@ -60,9 +60,9 @@ impl Command {
             server.connect_direct().await?
         } else {
             // For mainnet/testnet, use the server selection logic
-            let params = consensus::Network::from(opts.network);
+            let params = NetworkParams::from(opts.network);
             let servers = Servers::parse(&opts.server)?;
-            let server = servers.pick(params)?;
+            let server = servers.pick(&params)?;
             if opts.disable_tor {
                 server.connect_direct().await?
             } else {
@@ -133,7 +133,7 @@ impl Command {
             recipients.iter().map(|r| r.as_ref() as _),
             &mnemonic,
             birthday.height(),
-            opts.network.into(),
+            opts.network,
         )?;
 
         let seed = {
@@ -143,26 +143,16 @@ impl Command {
             SecretVec::new(secret)
         };
 
-        // Initialize DBs with appropriate network params
-        if opts.network.is_regtest() {
-            Self::init_dbs(
-                regtest_network(),
-                wallet_dir.as_ref(),
-                &opts.name,
-                &seed,
-                birthday,
-                None,
-            )
-        } else {
-            Self::init_dbs(
-                consensus::Network::from(opts.network),
-                wallet_dir.as_ref(),
-                &opts.name,
-                &seed,
-                birthday,
-                None,
-            )
-        }
+        // Initialize DBs with NetworkParams (works for all networks including regtest)
+        let params = NetworkParams::from(opts.network);
+        Self::init_dbs(
+            params,
+            wallet_dir.as_ref(),
+            &opts.name,
+            &seed,
+            birthday,
+            None,
+        )
     }
 
     pub(crate) async fn get_wallet_birthday(

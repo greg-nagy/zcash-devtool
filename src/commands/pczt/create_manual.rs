@@ -29,7 +29,7 @@ use zcash_script::script;
 
 use crate::{
     config::WalletConfig,
-    data::Network,
+    data::{Network, NetworkParams},
     error,
     remote::{tor_client, Servers},
 };
@@ -143,8 +143,8 @@ enum SpendInfo {
 
 impl Command {
     pub(crate) async fn run(self, wallet_dir: Option<String>) -> anyhow::Result<()> {
-        let params = if let Some(network) = self.network {
-            consensus::Network::from(network)
+        let params: NetworkParams = if let Some(network) = self.network {
+            NetworkParams::from(network)
         } else {
             let config = WalletConfig::read(wallet_dir.as_ref())?;
             config.network()
@@ -166,7 +166,7 @@ impl Command {
             .transpose()?
             .map(MemoBytes::from);
 
-        let server = self.server.pick(params)?;
+        let server = self.server.pick(&params)?;
         let mut client = if self.disable_tor {
             server.connect_direct().await?
         } else {
@@ -308,7 +308,7 @@ impl Command {
                                memo: Option<MemoBytes>|
          -> anyhow::Result<_> {
             let mut builder = Builder::new(
-                params,
+                params.clone(),
                 target_height,
                 zcash_primitives::transaction::builder::BuildConfig::Standard {
                     sapling_anchor,

@@ -7,9 +7,8 @@ use tracing::info;
 use zcash_client_backend::{
     proto::service::compact_tx_streamer_client::CompactTxStreamerClient, tor,
 };
-use zcash_protocol::consensus::Network;
 
-use crate::data::get_tor_dir;
+use crate::data::{get_tor_dir, Network, NetworkParams};
 
 const ECC_TESTNET: &[Server<'_>] = &[Server::fixed("lightwalletd.testnet.electriccoin.co", 9067)];
 
@@ -43,12 +42,15 @@ pub(crate) enum ServerOperator {
 impl ServerOperator {
     fn servers(&self, network: Network) -> &[Server<'_>] {
         match (self, network) {
-            (ServerOperator::Ecc, Network::MainNetwork) => &[],
-            (ServerOperator::Ecc, Network::TestNetwork) => ECC_TESTNET,
-            (ServerOperator::YWallet, Network::MainNetwork) => YWALLET_MAINNET,
-            (ServerOperator::YWallet, Network::TestNetwork) => &[],
-            (ServerOperator::ZecRocks, Network::MainNetwork) => ZEC_ROCKS_MAINNET,
-            (ServerOperator::ZecRocks, Network::TestNetwork) => ZEC_ROCKS_TESTNET,
+            (ServerOperator::Ecc, Network::Main) => &[],
+            (ServerOperator::Ecc, Network::Test) => ECC_TESTNET,
+            (ServerOperator::Ecc, Network::Regtest) => &[],
+            (ServerOperator::YWallet, Network::Main) => YWALLET_MAINNET,
+            (ServerOperator::YWallet, Network::Test) => &[],
+            (ServerOperator::YWallet, Network::Regtest) => &[],
+            (ServerOperator::ZecRocks, Network::Main) => ZEC_ROCKS_MAINNET,
+            (ServerOperator::ZecRocks, Network::Test) => ZEC_ROCKS_TESTNET,
+            (ServerOperator::ZecRocks, Network::Regtest) => &[],
         }
     }
 }
@@ -81,7 +83,8 @@ impl Servers {
         }
     }
 
-    pub(crate) fn pick(&self, network: Network) -> anyhow::Result<&Server<'_>> {
+    pub(crate) fn pick(&self, params: &NetworkParams) -> anyhow::Result<&Server<'_>> {
+        let network = params.network();
         // For now just use the first server in the list.
         match self {
             Servers::Hosted(server_operator) => server_operator

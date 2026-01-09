@@ -12,7 +12,7 @@ use zip32::fingerprint::SeedFingerprint;
 
 use crate::{
     config::WalletConfig,
-    data::init_dbs,
+    data::{init_dbs, Network, NetworkParams},
     parse_hex,
     remote::{tor_client, Servers},
 };
@@ -72,14 +72,15 @@ impl Command {
             )?;
 
         let network = match network_type {
-            NetworkType::Main => consensus::Network::MainNetwork,
-            NetworkType::Test => consensus::Network::TestNetwork,
+            NetworkType::Main => Network::Main,
+            NetworkType::Test => Network::Test,
             NetworkType::Regtest => {
-                return Err(anyhow!("the regtest network is not supported"));
+                return Err(anyhow!("the regtest network is not supported by init-fvk"));
             }
         };
+        let params = NetworkParams::from(network);
 
-        let server = opts.server.pick(network)?;
+        let server = opts.server.pick(&params)?;
         let mut client = if opts.disable_tor {
             server.connect_direct().await?
         } else {
@@ -123,7 +124,7 @@ impl Command {
         // Save the wallet config to disk.
         WalletConfig::init_without_mnemonic(wallet_dir.as_ref(), birthday.height(), network)?;
 
-        let mut wallet_db = init_dbs(network, wallet_dir.as_ref())?;
+        let mut wallet_db = init_dbs(params, wallet_dir.as_ref())?;
         wallet_db.import_account_ufvk(&opts.name, &ufvk, &birthday, purpose, None)?;
 
         Ok(())

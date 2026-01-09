@@ -87,8 +87,8 @@ impl Command {
         let (fsblockdb_root, db_data) = get_db_paths(wallet_dir.as_ref());
         let fsblockdb_root = fsblockdb_root.as_path();
         let mut db_cache = FsBlockDb::for_path(fsblockdb_root).map_err(error::Error::from)?;
-        let mut db_data = WalletDb::for_path(db_data, params, SystemClock, OsRng)?;
-        let mut client = self.server.pick(params)?.connect_direct().await?;
+        let mut db_data = WalletDb::for_path(db_data, params.clone(), SystemClock, OsRng)?;
+        let mut client = self.server.pick(&params)?.connect_direct().await?;
 
         #[cfg(feature = "tui")]
         let wallet_birthday = db_data

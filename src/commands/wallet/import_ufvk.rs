@@ -13,7 +13,7 @@ use zcash_protocol::consensus;
 use zip32::fingerprint::SeedFingerprint;
 
 use crate::{
-    data::get_db_paths,
+    data::{get_db_paths, NetworkParams},
     error, parse_hex,
     remote::{tor_client, Servers},
 };
@@ -55,22 +55,22 @@ impl Command {
         let (network, ufvk) = unified::Ufvk::decode(&self.ufvk)?;
         let ufvk = UnifiedFullViewingKey::parse(&ufvk).map_err(|e| anyhow!("{e}"))?;
 
-        let params = match network {
-            consensus::NetworkType::Main => Ok(consensus::Network::MainNetwork),
-            consensus::NetworkType::Test => Ok(consensus::Network::TestNetwork),
+        let params: NetworkParams = match network {
+            consensus::NetworkType::Main => Ok(consensus::Network::MainNetwork.into()),
+            consensus::NetworkType::Test => Ok(consensus::Network::TestNetwork.into()),
             consensus::NetworkType::Regtest => {
                 Err(anyhow!("UFVK is for regtest, which is unsupported"))
             }
         }?;
 
         let (_, db_data) = get_db_paths(wallet_dir.as_ref());
-        let mut db_data = WalletDb::for_path(db_data, params, SystemClock, OsRng)?;
+        let mut db_data = WalletDb::for_path(db_data, params.clone(), SystemClock, OsRng)?;
 
         // Construct an `AccountBirthday` for the account's birthday.
         let birthday = {
             // Fetch the tree state corresponding to the last block prior to the wallet's
             // birthday height. NOTE: THIS APPROACH LEAKS THE BIRTHDAY TO THE SERVER!
-            let server = self.server.pick(params)?;
+            let server = self.server.pick(&params)?;
             let mut client = if self.disable_tor {
                 server.connect_direct().await?
             } else {

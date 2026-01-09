@@ -8,7 +8,7 @@ use zcash_client_sqlite::{FsBlockDb, WalletDb};
 use tracing::error;
 
 use zcash_client_sqlite::chain::BlockMeta;
-use zcash_protocol::consensus::{self, BlockHeight, Parameters};
+use zcash_protocol::consensus::{self, BlockHeight, NetworkType, NetworkUpgrade, Parameters};
 use zcash_protocol::local_consensus::LocalNetwork;
 
 use crate::error;
@@ -18,6 +18,7 @@ const BLOCKS_FOLDER: &str = "blocks";
 const DATA_DB: &str = "data.sqlite";
 const TOR_DIR: &str = "tor";
 
+/// Simple network identifier for CLI parsing and config storage
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) enum Network {
     #[default]
@@ -52,7 +53,7 @@ impl Network {
 
 /// Default Regtest network parameters matching Zebra's default configuration.
 /// All upgrades activate at height 1 (except Genesis at 0).
-pub(crate) fn regtest_network() -> LocalNetwork {
+pub(crate) fn regtest_params() -> LocalNetwork {
     LocalNetwork {
         overwinter: Some(BlockHeight::from_u32(1)),
         sapling: Some(BlockHeight::from_u32(1)),
@@ -69,14 +70,67 @@ pub(crate) fn regtest_network() -> LocalNetwork {
     }
 }
 
+/// Unified network parameters type that works for all networks including Regtest.
+/// This enum wraps both `consensus::Network` (for mainnet/testnet) and `LocalNetwork` (for regtest)
+/// and implements `Parameters` so it can be used anywhere network params are needed.
+#[derive(Clone, Debug)]
+pub enum NetworkParams {
+    /// Mainnet or Testnet
+    Standard(consensus::Network),
+    /// Regtest with custom activation heights
+    Regtest(LocalNetwork),
+}
+
+impl NetworkParams {
+    /// Returns the simple network identifier
+    pub fn network(&self) -> Network {
+        match self {
+            NetworkParams::Standard(consensus::Network::MainNetwork) => Network::Main,
+            NetworkParams::Standard(consensus::Network::TestNetwork) => Network::Test,
+            NetworkParams::Regtest(_) => Network::Regtest,
+        }
+    }
+}
+
+impl Parameters for NetworkParams {
+    fn network_type(&self) -> NetworkType {
+        match self {
+            NetworkParams::Standard(n) => n.network_type(),
+            NetworkParams::Regtest(n) => n.network_type(),
+        }
+    }
+
+    fn activation_height(&self, nu: NetworkUpgrade) -> Option<BlockHeight> {
+        match self {
+            NetworkParams::Standard(n) => n.activation_height(nu),
+            NetworkParams::Regtest(n) => n.activation_height(nu),
+        }
+    }
+}
+
+impl From<Network> for NetworkParams {
+    fn from(value: Network) -> Self {
+        match value {
+            Network::Main => NetworkParams::Standard(consensus::Network::MainNetwork),
+            Network::Test => NetworkParams::Standard(consensus::Network::TestNetwork),
+            Network::Regtest => NetworkParams::Regtest(regtest_params()),
+        }
+    }
+}
+
+impl From<consensus::Network> for NetworkParams {
+    fn from(value: consensus::Network) -> Self {
+        NetworkParams::Standard(value)
+    }
+}
+
+// Keep these for backwards compatibility with existing code
 impl From<Network> for consensus::Network {
     fn from(value: Network) -> Self {
         match value {
             Network::Test => consensus::Network::TestNetwork,
             Network::Main => consensus::Network::MainNetwork,
-            // Regtest should use LocalNetwork, not consensus::Network
-            // This conversion is kept for backwards compatibility but should not be used for Regtest
-            Network::Regtest => consensus::Network::TestNetwork,
+            Network::Regtest => consensus::Network::TestNetwork, // Fallback, use NetworkParams instead
         }
     }
 }
