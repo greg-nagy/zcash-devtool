@@ -47,6 +47,11 @@ pub(crate) struct Command {
     /// Disable connections via TOR
     #[arg(long)]
     disable_tor: bool,
+
+    /// BIP-39 mnemonic phrase (24 words). If not provided, prompts interactively or generates new.
+    /// Use for scripted/CI environments where interactive input is not available.
+    #[arg(long)]
+    mnemonic: Option<String>,
 }
 
 impl Command {
@@ -106,16 +111,26 @@ impl Command {
         };
 
         // Parse or create the wallet's mnemonic phrase.
-        let phrase = SecretString::new(rpassword::prompt_password(
-            "Enter mnemonic (or just press Enter to generate a new one):",
-        )?);
-        let (mnemonic, recover_until) = if !phrase.expose_secret().is_empty() {
+        // Priority: 1) --mnemonic flag, 2) interactive prompt, 3) generate new
+        let (mnemonic, recover_until) = if let Some(ref mnemonic_str) = opts.mnemonic {
+            // Mnemonic provided via CLI flag or env var
             (
-                <Mnemonic<English>>::from_phrase(phrase.expose_secret())?,
+                <Mnemonic<English>>::from_phrase(mnemonic_str)?,
                 Some(chain_tip.into()),
             )
         } else {
-            (Mnemonic::generate(Count::Words24), None)
+            // Interactive prompt
+            let phrase = SecretString::new(rpassword::prompt_password(
+                "Enter mnemonic (or just press Enter to generate a new one):",
+            )?);
+            if !phrase.expose_secret().is_empty() {
+                (
+                    <Mnemonic<English>>::from_phrase(phrase.expose_secret())?,
+                    Some(chain_tip.into()),
+                )
+            } else {
+                (Mnemonic::generate(Count::Words24), None)
+            }
         };
 
         let birthday = Self::get_wallet_birthday(
