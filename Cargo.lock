@@ -8005,6 +8005,7 @@ version = "0.1.0"
 dependencies = [
  "age",
  "anyhow",
+ "base64 0.22.1",
  "bech32 0.11.0",
  "bellman",
  "bip0039",

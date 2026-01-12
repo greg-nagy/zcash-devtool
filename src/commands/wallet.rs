@@ -15,9 +15,11 @@ pub(crate) mod list_tx;
 pub(crate) mod list_unspent;
 pub(crate) mod propose;
 pub(crate) mod reset;
+pub(crate) mod scan_tags;
 pub(crate) mod send;
 pub(crate) mod shield;
 pub(crate) mod sync;
+pub(crate) mod tag_keys;
 pub(crate) mod tree;
 pub(crate) mod upgrade;
 
@@ -83,4 +85,11 @@ pub(crate) enum Command {
     /// Commands that operate directly on the note commitment trees
     #[command(subcommand)]
     Tree(tree::Command),
+
+    /// Manage detection tag keys for PIR-based scanning
+    #[command(subcommand)]
+    TagKeys(tag_keys::Command),
+
+    /// Scan for transactions using PIR tag pre-filtering
+    ScanTags(scan_tags::Command),
 }

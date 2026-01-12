@@ -170,6 +170,13 @@ fn main() -> Result<(), anyhow::Error> {
                     }
                     commands::wallet::tree::Command::Fix(command) => command.run(wallet_dir).await,
                 },
+                commands::wallet::Command::TagKeys(command) => match command {
+                    commands::wallet::tag_keys::Command::Show(cmd) => cmd.run(wallet_dir),
+                    commands::wallet::tag_keys::Command::Export(cmd) => cmd.run(wallet_dir),
+                    commands::wallet::tag_keys::Command::Generate(cmd) => cmd.run(wallet_dir),
+                    commands::wallet::tag_keys::Command::Verify(cmd) => cmd.run(wallet_dir),
+                },
+                commands::wallet::Command::ScanTags(command) => command.run(wallet_dir).await,
             },
             Command::Zip48(commands::Zip48 {
                 wallet_dir,
