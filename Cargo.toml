@@ -32,14 +32,14 @@ uuid = "1"
 zcash_script = "0.4"
 
 orchard = { version = "0.11", default-features = false }
-pczt = "0.4"
+pczt = { version = "0.4", features = ["zip-233"] }
 sapling = { package = "sapling-crypto", version = "0.5" }
 transparent = { package = "zcash_transparent", version = "0.6", features = ["test-dependencies"] }
 zcash_address = "0.10"
 zcash_client_backend = { version = "0.20", features = ["lightwalletd-tonic-tls-webpki-roots", "orchard", "pczt", "tor"] }
-zcash_client_sqlite = { version = "0.18", features = ["unstable", "orchard", "serde"] }
+zcash_client_sqlite = { version = "0.18", features = ["unstable", "orchard", "serde", "zip-233"] }
 zcash_keys = { version = "0.11", features = ["unstable", "orchard"] }
-zcash_primitives = "0.26"
+zcash_primitives = { version = "0.26", features = ["zip-233"] }
 zcash_proofs = { version = "0.26", features = ["bundled-prover"] }
 zcash_protocol = { version = "0.7", features = ["local-consensus"] }
 zip32 = "0.2"

@@ -141,7 +141,7 @@ pub(crate) fn inspect(
     match tx.version() {
         // TODO: If pre-v5 and no branch ID provided in context, disable signature checks.
         TxVersion::Sprout(_) | TxVersion::V3 | TxVersion::V4 => (),
-        TxVersion::V5 => {
+        TxVersion::V5 | TxVersion::V6 => {
             eprintln!(" - Consensus branch ID: {:?}", tx.consensus_branch_id());
         }
     }

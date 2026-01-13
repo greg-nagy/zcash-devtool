@@ -51,8 +51,13 @@ impl Network {
     }
 }
 
-/// Default Regtest network parameters matching Zebra's default configuration.
-/// All upgrades activate at height 1 (except Genesis at 0).
+/// Regtest network parameters matching our Zebra config (config/zebra-regtest.toml).
+/// Activation heights:
+///   - Canopy: 1
+///   - NU5: 2
+///   - NU6: 3
+///   - NU6.1: 4
+///   - NU7: 5
 pub(crate) fn regtest_params() -> LocalNetwork {
     LocalNetwork {
         overwinter: Some(BlockHeight::from_u32(1)),
@@ -60,11 +65,11 @@ pub(crate) fn regtest_params() -> LocalNetwork {
         blossom: Some(BlockHeight::from_u32(1)),
         heartwood: Some(BlockHeight::from_u32(1)),
         canopy: Some(BlockHeight::from_u32(1)),
-        nu5: Some(BlockHeight::from_u32(1)),
-        nu6: Some(BlockHeight::from_u32(1)),
-        nu6_1: None, // Not activated by default
+        nu5: Some(BlockHeight::from_u32(2)),
+        nu6: Some(BlockHeight::from_u32(3)),
+        nu6_1: Some(BlockHeight::from_u32(4)),
         #[cfg(zcash_unstable = "nu7")]
-        nu7: None,
+        nu7: Some(BlockHeight::from_u32(5)),
         #[cfg(zcash_unstable = "zfuture")]
         z_future: None,
     }

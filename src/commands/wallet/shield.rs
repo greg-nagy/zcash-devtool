@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU32, NonZeroUsize};
 
 use anyhow::anyhow;
 use clap::Args;
@@ -123,11 +123,22 @@ impl Command {
 
         // For this dev tool, shield all funds immediately.
         let target_height = match db_data.chain_height()? {
-            Some(chain_height) => (chain_height + 1).into(),
+            Some(chain_height) => {
+                println!("DEBUG: wallet chain_height = {}, target_height = {}", chain_height, u32::from(chain_height) + 1);
+                (chain_height + 1).into()
+            }
             // If we haven't scanned anything, there's nothing to do.
             None => return Ok(()),
         };
-        let confirmations_policy = ConfirmationsPolicy::MIN;
+        // Use 105 confirmations to respect coinbase maturity rules (100 blocks)
+        // plus a buffer (5 blocks) for chain advancement during transaction building.
+        // Coinbase outputs (from mining) require 100 blocks before they can be spent.
+        // TODO: The wallet should track coinbase outputs separately and enforce this
+        // only for coinbase, not for regular transparent transfers.
+        let confirmations_policy = ConfirmationsPolicy::new_symmetrical(
+            NonZeroU32::new(105).unwrap(),
+            false,  // don't allow zero-conf shielding
+        );
         let transparent_balances =
             db_data.get_transparent_balances(account.id(), target_height, confirmations_policy)?;
         let from_addrs = transparent_balances
@@ -146,6 +157,30 @@ impl Command {
             confirmations_policy,
         )
         .map_err(error::Error::Shield)?;
+
+        // Debug: print the proposal summary
+        for step in proposal.steps() {
+            println!("Step balance: {:?}", step.balance());
+            let input_count = step.transparent_inputs().len();
+            println!("Step transparent_inputs count: {}", input_count);
+            
+            // Calculate expected logical actions assuming P2PKH (150 bytes each)
+            let expected_t_logical_actions = input_count;  // Each P2PKH input is ~150 bytes = 1 logical action
+            println!("Step transparent_inputs expected logical actions: {}", expected_t_logical_actions);
+            
+            println!("Step is_shielding: {}", step.is_shielding());
+            println!("Step involves Orchard: {}", step.involves(zcash_protocol::PoolType::Shielded(zcash_protocol::ShieldedProtocol::Orchard)));
+            
+            // Calculate expected fee
+            // orchard_action_count should be 2 (MIN_ACTIONS) for 1 output
+            let expected_orchard_actions = 2;
+            let expected_logical_actions = expected_t_logical_actions + expected_orchard_actions;
+            let expected_fee = 5000 * expected_logical_actions;
+            println!("Step expected logical actions: {} transparent + {} orchard = {}", 
+                expected_t_logical_actions, expected_orchard_actions, expected_logical_actions);
+            println!("Step expected fee: {} zatoshis", expected_fee);
+            println!("Step actual fee from proposal: {} zatoshis", step.balance().fee_required().into_u64());
+        }
 
         let txids = create_proposed_transactions(
             &mut db_data,
